@@ -1,4 +1,4 @@
-import db from "../config/db.js";
+import { db } from "../config/db.js";
 import bcrypt from "bcryptjs";
 
 export class UsuarioModel {
@@ -13,19 +13,20 @@ export class UsuarioModel {
       queryParams.push(searchTerm, searchTerm, searchTerm);
     }
 
-    const [rows] = await db.query(query, queryParams);
+    const [rows] = await db.pitar.query(query, queryParams);
     return rows;
   }
 
   static async getById(id) {
-    const [rows] = await db.query("SELECT * FROM v_usuarios WHERE id = ?", [
-      id,
-    ]);
+    const [rows] = await db.pitar.query(
+      "SELECT * FROM v_usuarios WHERE id = ?",
+      [id],
+    );
     return rows[0];
   }
 
   static async getByUser(username) {
-    const [rows] = await db.query(
+    const [rows] = await db.pitar.query(
       "SELECT * FROM v_usuarios WHERE username = ?",
       [username],
     );
@@ -33,14 +34,17 @@ export class UsuarioModel {
   }
 
   static async getUserCredentials(username) {
-    const [rows] = await db.query("SELECT * FROM usuarios WHERE username = ?", [
-      username,
-    ]);
+    const [rows] = await db.pitar.query(
+      "SELECT * FROM usuarios WHERE username = ?",
+      [username],
+    );
     return rows[0];
   }
 
   static async getUserCredentialsById(id) {
-    const [rows] = await db.query("SELECT * FROM usuarios WHERE id = ?", [id]);
+    const [rows] = await db.pitar.query("SELECT * FROM usuarios WHERE id = ?", [
+      id,
+    ]);
     return rows[0];
   }
 
@@ -60,7 +64,7 @@ export class UsuarioModel {
       "." + nombres.slice(-1) + documento + apellidos.charAt(0) + ".";
     const pass_hash = await this.hashPassword(pass);
 
-    const [rows] = await db.execute(
+    const [rows] = await db.pitar.execute(
       "CALL p_nuevo_usuario(?, ?, ?, ?, ?, ?, ?, ?)",
       [
         nombres,
@@ -77,17 +81,34 @@ export class UsuarioModel {
     return { message: "Usuario creado exitosamente", rows };
   }
 
-  static async update(id, username, email) {
-    const [rows] = await db.execute(
-      "UPDATE usuarios SET username = ?, email = ? WHERE id = ?",
-      [username, email, id],
+  static async update(id, email, activo, roles) {
+    await db.pitar.execute(
+      "UPDATE usuarios SET email = ?, activo = ? WHERE id = ?",
+      [email, activo, id],
     );
-    return { message: "Usuario actualizado exitosamente", rows };
+    await db.pitar.execute("DELETE FROM usuario_rol WHERE id_usuario = ?", [
+      id,
+    ]);
+    const rolesList = await db.pitar.query(
+      "SELECT id FROM roles WHERE codigo IN (?)",
+      [roles],
+    );
+    if (rolesList.length > 0) {
+      const usuarioRolValues = rolesList[0].map((rol) => [
+        parseInt(id),
+        rol.id,
+      ]);
+      await db.pitar.query("INSERT usuario_rol (id_usuario, id_rol) VALUES ?", [
+        usuarioRolValues,
+      ]);
+    }
+
+    return { message: "Usuario actualizado exitosamente" };
   }
 
   static async updatePass(id, newPassword) {
     const hashedPassword = await this.hashPassword(newPassword);
-    await db.execute("UPDATE usuarios SET pass_hash = ? WHERE id = ?", [
+    await db.pitar.execute("UPDATE usuarios SET pass_hash = ? WHERE id = ?", [
       hashedPassword,
       id,
     ]);
@@ -95,14 +116,17 @@ export class UsuarioModel {
   }
 
   static async updateLastConnection(id) {
-    await db.execute("UPDATE usuarios SET ultimo_login = NOW() WHERE id = ?", [
-      id,
-    ]);
+    await db.pitar.execute(
+      "UPDATE usuarios SET ultimo_login = NOW() WHERE id = ?",
+      [id],
+    );
     return { message: "Última conexión actualizada exitosamente" };
   }
 
   static async delete(id) {
-    const [rows] = await db.execute("DELETE FROM usuarios WHERE id = ?", [id]);
+    const [rows] = await db.pitar.execute("DELETE FROM usuarios WHERE id = ?", [
+      id,
+    ]);
     return { message: "Usuario eliminado exitosamente", rows };
   }
 

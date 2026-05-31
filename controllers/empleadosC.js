@@ -1,17 +1,28 @@
 import { EmpleadoModel } from "../models/empleado.js";
 
 export class EmpleadoController {
+  static getEmpleadoId = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const empleadoId = await EmpleadoModel.getEmpleadoId(id);
+
+      if (!empleadoId)
+        return res
+          .status(404)
+          .json({ message: "ID del empleado no encontrado" });
+
+      return res.json(empleadoId);
+    } catch (error) {
+      console.log("Error al obtener el ID del empleado.", error);
+      return res.status(500).json({ message: "Error interno del servidor" });
+    }
+  };
+
   static getById = async (req, res) => {
     try {
       const { id } = req.params;
-      const { q } = req.query;
 
-      let empleado;
-      if (q) {
-        empleado = await EmpleadoModel.getEmpleadoByIdUsuario(id);
-      } else {
-        empleado = await EmpleadoModel.getById(id);
-      }
+      const empleado = await EmpleadoModel.getById(id);
 
       if (!empleado)
         return res.status(404).json({ message: "Empleado no encontrado" });
@@ -23,15 +34,29 @@ export class EmpleadoController {
     }
   };
 
+  static getAnexosById = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const anexos = await EmpleadoModel.getAnexosById(id);
+      return res.json(anexos);
+    } catch (error) {
+      console.log("Error al obtener anexos.", error);
+      return res.status(500).json({ message: "Error interno del servidor" });
+    }
+  };
+
   static updateEmpleado = async (req, res) => {
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
+      console.log("Controller | Body:", updateData);
 
-      console.log("id", id);
-      console.log("updateData", updateData);
       // Eliminar id_usuario de los datos a actualizar
       delete updateData.id_usuario;
+
+      if (!req.body.foto) {
+        updateData.foto = !req.body.foto ? null : req.body.foto.buffer;
+      }
 
       const updatedEmpleado = await EmpleadoModel.updateEmpleado(
         id,

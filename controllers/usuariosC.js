@@ -83,14 +83,12 @@ export class UsuarioController {
   static update = async (req, res) => {
     try {
       const { id } = req.params;
-      const { username, password, email, activo } = req.body;
-
+      const { email, activo, roles } = req.body;
       const updatedUsuario = await UsuarioModel.update(
         id,
-        username,
-        password,
         email,
         activo,
+        roles,
       );
 
       if (!updatedUsuario)

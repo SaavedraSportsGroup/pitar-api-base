@@ -8,13 +8,10 @@ import empleadoRouter from "./routes/empleadoR.js";
 import disponibilidadRouter from "./routes/disponibilidadR.js";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
-import path from "path";
-import { fileURLToPath } from "url";
+import { db } from "./config/db.js";
 
 const PORT = process.env.PORT ?? process.env.DEFAULT_PORT;
 const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Middlewares
 app.use(corsMiddleware());
@@ -29,12 +26,22 @@ app.use("/api/usuarios", usuariosRouter);
 app.use("/api/empleados", empleadoRouter);
 app.use("/api/disponibilidad", disponibilidadRouter);
 
-app.get("/", (req, res) => {
-  res.status(200).sendFile(path.join(__dirname, "index.html"));
+// Salud del servicio. En Vercel no se sirven archivos estáticos desde Express:
+// estas rutas responden JSON para que el navegador no reciba un error.
+app.get(["/", "/api"], (req, res) => {
+  res.status(200).json({ status: "ok", message: "API PITAR en funcionamiento" });
 });
 
-app.get("/api", (req, res) => {
-  res.status(200).sendFile(path.join(__dirname, "index.html"));
+// Health check con verificación real de la base de datos: permite detectar
+// errores de configuración de entorno (host, credenciales, red) en producción.
+app.get("/api/health", async (req, res) => {
+  try {
+    await db.pitar.query("SELECT 1");
+    res.status(200).json({ status: "ok", db: "ok" });
+  } catch (error) {
+    console.error("Health check: base de datos no disponible:", error.message);
+    res.status(200).json({ status: "degraded", db: "error" });
+  }
 });
 
 app.use((req, res) => {

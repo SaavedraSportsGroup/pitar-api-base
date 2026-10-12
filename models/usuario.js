@@ -85,12 +85,17 @@ export class UsuarioModel {
     // commiteado como fila huérfana. La transacción aquí garantiza que CALL,
     // la asignación de los roles restantes y SELECT @username se confirmen
     // juntos o se reviertan juntos.
-    await db.pitar.beginTransaction();
+    // Una transacción sobre pool requiere UNA sola conexión durante todo el
+    // ciclo: query/execute del pool tomarían conexiones distintas y romperían
+    // la transacción. getConnection() la reserva y release() la devuelve.
+    const conn = await db.pitar.getConnection();
     try {
+      await conn.beginTransaction();
+
       // Se usa una variable de sesión (@username) para capturar el OUT del SP,
       // ya que el procedimiento genera el username internamente.
       // p_nuevo_usuario crea el usuario y el empleado, y asigna el PRIMER rol.
-      await db.pitar.execute(
+      await conn.execute(
         "CALL p_nuevo_usuario(?, ?, ?, ?, ?, ?, ?, @username)",
         [
           nombres,
@@ -103,33 +108,33 @@ export class UsuarioModel {
         ],
       );
 
-      const [rows] = await db.pitar.query("SELECT @username AS username");
+      const [rows] = await conn.query("SELECT @username AS username");
       const username = rows[0]?.username ?? null;
 
       // p_nuevo_usuario solo asigna un rol; el resto se inserta dentro de la
       // MISMA transacción con el mismo patrón que UsuarioModel.update.
       const rolesRestantes = rolesUnicos.slice(1);
       if (rolesRestantes.length > 0) {
-        const [rolesRows] = await db.pitar.query(
+        const [rolesRows] = await conn.query(
           "SELECT id FROM roles WHERE codigo IN (?)",
           [rolesRestantes],
         );
         if (rolesRows.length !== rolesRestantes.length) {
           throw new Error("Uno o más roles no existen");
         }
-        const [usuarioRows] = await db.pitar.query(
+        const [usuarioRows] = await conn.query(
           "SELECT id FROM usuarios WHERE username = ?",
           [username],
         );
         const id_usuario = usuarioRows[0].id;
         const values = rolesRows.map((rol) => [id_usuario, rol.id]);
-        await db.pitar.query(
+        await conn.query(
           "INSERT usuario_rol (id_usuario, id_rol) VALUES ?",
           [values],
         );
       }
 
-      await db.pitar.commit();
+      await conn.commit();
 
       // temporaryPassword viaja solo para el envío del correo; el controlador
       // no debe exponerla en la respuesta al cliente.
@@ -140,8 +145,10 @@ export class UsuarioModel {
         temporaryPassword: pass,
       };
     } catch (error) {
-      await db.pitar.rollback();
+      await conn.rollback().catch(() => {});
       throw error;
+    } finally {
+      conn.release();
     }
   }
 

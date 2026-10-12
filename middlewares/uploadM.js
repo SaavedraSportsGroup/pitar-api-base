@@ -5,11 +5,11 @@ import multer from "multer";
  *
  * Annexes are stored as MEDIUMBLOB in `empleados_anexos.archivo_anexo`, so the
  * file is kept in memory and handed to the model as a Buffer (no disk writes).
- * Only PDF files up to 5 MB are accepted.
+ * Only PDF files up to 1 MB are accepted.
  */
 
 export const ALLOWED_ANEXO_MIME = "application/pdf";
-export const MAX_ANEXO_SIZE = 5 * 1024 * 1024; // 5 MB in bytes
+export const MAX_ANEXO_SIZE = 1 * 1024 * 1024; // 1 MB in bytes
 
 
 const storage = multer.memoryStorage();
@@ -45,7 +45,7 @@ export const handleUploadError = (err, res) => {
   if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
     return res
       .status(413)
-      .json({ message: "El archivo supera el límite de 5 MB" });
+      .json({ message: "El archivo supera el límite de 1 MB" });
   }
   return res
     .status(400)

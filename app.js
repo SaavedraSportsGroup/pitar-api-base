@@ -1,9 +1,11 @@
 import express from "express";
 import { corsMiddleware } from "./middlewares/corsM.js";
+import arbitroRouter from "./routes/arbitroR.js";
 import authRouter from "./routes/authR.js";
 import parametrosRouter from "./routes/parametrosR.js";
 import usuariosRouter from "./routes/usuariosR.js";
 import empleadoRouter from "./routes/empleadoR.js";
+import disponibilidadRouter from "./routes/disponibilidadR.js";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import path from "path";
@@ -20,10 +22,12 @@ app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 
 // Rutas
+app.use("/api/arbitros", arbitroRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/parametros", parametrosRouter);
 app.use("/api/usuarios", usuariosRouter);
 app.use("/api/empleados", empleadoRouter);
+app.use("/api/disponibilidad", disponibilidadRouter);
 
 app.get("/", (req, res) => {
   res.status(200).sendFile(path.join(__dirname, "index.html"));

@@ -31,7 +31,8 @@ const CAMPOS_EMPLEADO_FINANCIERO = [
   "numero_cuenta",
 ];
 
-const CAMPOS_EMPLEADO_ANEXOS = ["documento_identidad"];
+// Allowed values for `empleados_anexos.tipo_anexo` (matches the DB ENUM).
+export const TIPOS_ANEXO = ["DNI", "RUT", "CCB"];
 
 export class EmpleadoModel {
   static async getEmpleadoId(id_usuario) {
@@ -50,14 +51,28 @@ export class EmpleadoModel {
     return rows[0];
   }
 
+  // Metadata only: the MEDIUMBLOB is never selected, so it can never leak into
+  // the JSON payload. `bytes` exposes the file size via OCTET_LENGTH instead.
   static async getAnexosById(id) {
-    console.log("Obteniendo anexos para empleado:", id);
     const [rows] = await db.pitar.query(
-      "SELECT * FROM v_empleados_anexos WHERE id_empleado = ?",
+      `SELECT tipo_anexo, nombre_anexo, fecha_actualizacion,
+              OCTET_LENGTH(archivo_anexo) AS bytes
+         FROM v_empleados_anexos
+        WHERE id_empleado = ?`,
       [id],
     );
-    console.log("Anexos obtenidos:", rows);
     return rows;
+  }
+
+  // Returns the raw PDF buffer for one annex (or null when it does not exist).
+  static async getAnexoArchivo(id_empleado, tipo_anexo) {
+    const [rows] = await db.pitar.query(
+      `SELECT nombre_anexo, archivo_anexo
+         FROM empleados_anexos
+        WHERE id_empleado = ? AND tipo_anexo = ?`,
+      [id_empleado, tipo_anexo],
+    );
+    return rows[0] ?? null;
   }
 
   static async updateEmpleado(id, updateData) {
@@ -172,38 +187,29 @@ export class EmpleadoModel {
     };
   }
 
-  static async updateEmpleadoAnexos(id_empleado, updateData) {
-    // Filtrar solo los campos que no son null o undefined
-    const fieldsToUpdate = Object.fromEntries(
-      Object.entries(updateData)
-        .filter(([key]) => CAMPOS_EMPLEADO_ANEXOS.includes(key))
-        .filter(
-          ([_, value]) => value !== null && value !== undefined && value !== "",
-        ),
-    );
-
-    if (Object.keys(fieldsToUpdate).length === 0) {
-      return { message: "No hay campos para actualizar", rows: [] };
+  static async upsertAnexo(id_empleado, tipo_anexo, nombre_anexo, archivoBuffer) {
+    if (!TIPOS_ANEXO.includes(tipo_anexo)) {
+      throw new Error(`Tipo de anexo inválido: ${tipo_anexo}`);
     }
 
-    // Construir dinámicamente la consulta UPDATE
-    const setClause = Object.keys(fieldsToUpdate)
-      .map((key) => `${key} = ?`)
-      .join(", ");
-
-    const values = Object.values(fieldsToUpdate);
-    values.push(id_empleado);
-    values.push(updateData.tipo_anexo);
-
     const [rows] = await db.pitar.execute(
-      `UPDATE empleados_anexos SET ${setClause} WHERE id_empleado = ? and tipo_anexo = ?`,
-      values,
+      `INSERT INTO empleados_anexos (id_empleado, tipo_anexo, nombre_anexo, archivo_anexo)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         nombre_anexo = VALUES(nombre_anexo),
+         archivo_anexo = VALUES(archivo_anexo)`,
+      [id_empleado, tipo_anexo, nombre_anexo, archivoBuffer],
     );
 
-    return {
-      message: "Anexos actualizados exitosamente",
-      fieldsUpdated: Object.keys(fieldsToUpdate),
-      rows,
-    };
+    return rows;
+  }
+
+  static async deleteAnexo(id_empleado, tipo_anexo) {
+    const [rows] = await db.pitar.execute(
+      "DELETE FROM empleados_anexos WHERE id_empleado = ? AND tipo_anexo = ?",
+      [id_empleado, tipo_anexo],
+    );
+
+    return rows;
   }
 }

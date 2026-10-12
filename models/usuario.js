@@ -33,6 +33,17 @@ export class UsuarioModel {
     return rows[0];
   }
 
+  // Role CODES (ADM/GER/SUP/ARB/CNT) for a user, one row per role in the
+  // v_usuarios_roles view. Used by the RBAC guard so role checks never depend on
+  // the display-name string exposed by v_usuarios.roles.
+  static async getRoleCodes(id) {
+    const [rows] = await db.pitar.query(
+      "SELECT codigo_rol FROM v_usuarios_roles WHERE id_usuario = ?",
+      [id],
+    );
+    return rows.map((row) => row.codigo_rol);
+  }
+
   static async getUserCredentials(username) {
     const [rows] = await db.pitar.query(
       "SELECT * FROM usuarios WHERE username = ?",
@@ -58,27 +69,80 @@ export class UsuarioModel {
     tipo_documento,
     documento,
     email,
-    rol,
+    roles,
   ) {
     const pass =
       "." + nombres.slice(-1) + documento + apellidos.charAt(0) + ".";
     const pass_hash = await this.hashPassword(pass);
 
-    const [rows] = await db.pitar.execute(
-      "CALL p_nuevo_usuario(?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        nombres,
-        apellidos,
-        tipo_documento,
-        documento,
-        email,
-        rol,
-        pass_hash,
-        null,
-      ],
-    );
+    // Compatibilidad hacia atrás: acepta un código único como string además
+    // del array de roles. Se deduplican para no romper la PK de usuario_rol.
+    const rolesArray = Array.isArray(roles) ? roles : [roles];
+    const rolesUnicos = [...new Set(rolesArray.filter(Boolean))];
 
-    return { message: "Usuario creado exitosamente", rows };
+    // El SP no es transaccional: si el INSERT en usuario_rol falla (p. ej.
+    // por un código de rol inexistente), el INSERT previo en usuarios quedaría
+    // commiteado como fila huérfana. La transacción aquí garantiza que CALL,
+    // la asignación de los roles restantes y SELECT @username se confirmen
+    // juntos o se reviertan juntos.
+    await db.pitar.beginTransaction();
+    try {
+      // Se usa una variable de sesión (@username) para capturar el OUT del SP,
+      // ya que el procedimiento genera el username internamente.
+      // p_nuevo_usuario crea el usuario y el empleado, y asigna el PRIMER rol.
+      await db.pitar.execute(
+        "CALL p_nuevo_usuario(?, ?, ?, ?, ?, ?, ?, @username)",
+        [
+          nombres,
+          apellidos,
+          tipo_documento,
+          documento,
+          email,
+          rolesUnicos[0],
+          pass_hash,
+        ],
+      );
+
+      const [rows] = await db.pitar.query("SELECT @username AS username");
+      const username = rows[0]?.username ?? null;
+
+      // p_nuevo_usuario solo asigna un rol; el resto se inserta dentro de la
+      // MISMA transacción con el mismo patrón que UsuarioModel.update.
+      const rolesRestantes = rolesUnicos.slice(1);
+      if (rolesRestantes.length > 0) {
+        const [rolesRows] = await db.pitar.query(
+          "SELECT id FROM roles WHERE codigo IN (?)",
+          [rolesRestantes],
+        );
+        if (rolesRows.length !== rolesRestantes.length) {
+          throw new Error("Uno o más roles no existen");
+        }
+        const [usuarioRows] = await db.pitar.query(
+          "SELECT id FROM usuarios WHERE username = ?",
+          [username],
+        );
+        const id_usuario = usuarioRows[0].id;
+        const values = rolesRows.map((rol) => [id_usuario, rol.id]);
+        await db.pitar.query(
+          "INSERT usuario_rol (id_usuario, id_rol) VALUES ?",
+          [values],
+        );
+      }
+
+      await db.pitar.commit();
+
+      // temporaryPassword viaja solo para el envío del correo; el controlador
+      // no debe exponerla en la respuesta al cliente.
+      return {
+        message: "Usuario creado exitosamente",
+        username,
+        email,
+        temporaryPassword: pass,
+      };
+    } catch (error) {
+      await db.pitar.rollback();
+      throw error;
+    }
   }
 
   static async update(id, email, activo, roles) {
@@ -121,6 +185,49 @@ export class UsuarioModel {
       [id],
     );
     return { message: "Última conexión actualizada exitosamente" };
+  }
+
+  // Recuperación de contraseña: localiza el usuario por username O email.
+  // El flujo de forgot/reset no debe diferenciar entre identificadores válidos
+  // e inválidos para evitar enumeración de cuentas.
+  static async findByIdentifier(identifier) {
+    const [rows] = await db.pitar.query(
+      "SELECT id, username, email, activo FROM usuarios WHERE username = ? OR email = ? LIMIT 1",
+      [identifier, identifier],
+    );
+    return rows[0];
+  }
+
+  // Guarda SOLO el hash SHA-256 del token de reset (nunca el token en claro)
+  // junto con su expiración.
+  static async setResetToken(userId, tokenHash, expira) {
+    await db.pitar.execute(
+      "UPDATE usuarios SET reset_token_hash = ?, reset_token_expira = ? WHERE id = ?",
+      [tokenHash, expira, userId],
+    );
+    return { message: "Token de recuperación almacenado" };
+  }
+
+  // Busca por hash de token. Incluye la expiración para que el controlador
+  // pueda distinguir entre token inválido y token vencido.
+  static async findUserByResetToken(tokenHash) {
+    const [rows] = await db.pitar.query(
+      "SELECT id, username, email, reset_token_expira FROM usuarios WHERE reset_token_hash = ?",
+      [tokenHash],
+    );
+    return rows[0];
+  }
+
+  // Efectúa el reset: nuevo pass_hash (el trigger t_bu_usuarios actualiza
+  // pass_fecha_cambio automáticamente) y limpia el token para que sea de un
+  // solo uso.
+  static async resetPassword(userId, newPassword) {
+    const hashedPassword = await this.hashPassword(newPassword);
+    await db.pitar.execute(
+      "UPDATE usuarios SET pass_hash = ?, reset_token_hash = NULL, reset_token_expira = NULL WHERE id = ?",
+      [hashedPassword, userId],
+    );
+    return { message: "Contraseña restablecida exitosamente" };
   }
 
   static async delete(id) {

@@ -34,6 +34,7 @@ export class ParametrosController {
       };
       res.status(200).json(data);
     } catch (error) {
+      console.error("Error en getParametros:", error);
       res.status(500).json({ message: "Error interno del servidor" });
     }
   };

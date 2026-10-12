@@ -76,12 +76,6 @@ export class EmpleadoModel {
   }
 
   static async updateEmpleado(id, updateData) {
-    console.log("Model | updateData:", updateData);
-    let fotoValue = null;
-    if (updateData.foto !== undefined) {
-      fotoValue = updateData.foto; // Buffer, null o undefined
-    }
-
     // Filtrar solo los campos que no son null o undefined
     const fieldsToUpdate = Object.fromEntries(
       Object.entries(updateData)
@@ -91,8 +85,11 @@ export class EmpleadoModel {
         ),
     );
 
-    if (fotoValue !== undefined) {
-      fieldsToUpdate.foto = fotoValue;
+    // `foto` is handled separately: include it ONLY when the caller explicitly
+    // provided a value (a new Buffer to replace it, or null to clear it). When
+    // absent, the stored BLOB must be left untouched.
+    if (updateData.foto !== undefined) {
+      fieldsToUpdate.foto = updateData.foto;
     }
 
     if (Object.keys(fieldsToUpdate).length === 0) {

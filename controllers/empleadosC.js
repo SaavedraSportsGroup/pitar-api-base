@@ -94,13 +94,21 @@ export class EmpleadoController {
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
-      console.log("Controller | Body:", updateData);
 
-      // Eliminar id_usuario de los datos a actualizar
+      // These are transport-only fields, never persisted.
       delete updateData.id_usuario;
+      const removeFoto = updateData.eliminar_foto === "1";
+      delete updateData.eliminar_foto;
 
-      if (!req.body.foto) {
-        updateData.foto = !req.body.foto ? null : req.body.foto.buffer;
+      // The photo travels as a multipart file (multer -> req.file). Only touch
+      // `foto` when the client actually changed it; otherwise leave it out so
+      // the stored BLOB is preserved.
+      if (req.file) {
+        updateData.foto = req.file.buffer;
+      } else if (removeFoto) {
+        updateData.foto = null;
+      } else {
+        delete updateData.foto;
       }
 
       const updatedEmpleado = await EmpleadoModel.updateEmpleado(

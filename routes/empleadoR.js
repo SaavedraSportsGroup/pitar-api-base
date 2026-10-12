@@ -5,7 +5,7 @@ import {
   requireEmployeeAccess,
   requireSelfUser,
 } from "../middlewares/empleadoAccessM.js";
-import { uploadAnexo } from "../middlewares/uploadM.js";
+import { uploadAnexo, uploadFoto } from "../middlewares/uploadM.js";
 
 const empleadoRouter = Router();
 
@@ -38,6 +38,7 @@ empleadoRouter.patch(
   "/:id",
   AuthMiddleware,
   requireEmployeeAccess,
+  uploadFoto,
   EmpleadoController.updateEmpleado,
 );
 empleadoRouter.patch(

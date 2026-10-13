@@ -84,6 +84,26 @@ export class DesignacionModel {
     return rows.length > 0;
   }
 
+  // Can this employee be DESIGNATED for a given partido? True when they have a
+  // free (DISPONIBLE) availability slot covering the match date/time, OR when
+  // they are already designated in this same match (a referee can cover several
+  // functions of one match; its slot is already locked as ASIGNADO).
+  static async arbitroDisponibleParaPartido(
+    idEmpleado,
+    { idCampeonato, codigoPartido, fecha, hora },
+  ) {
+    const franja = await this.franjaQueCubre(idEmpleado, fecha, hora);
+    if (franja && franja.estado === "DISPONIBLE") return true;
+    const [rows] = await db.pitar.query(
+      `SELECT 1
+         FROM partidos_arbitros
+        WHERE id_arbitro_des = ? AND id_campeonato = ? AND codigo_partido = ?
+        LIMIT 1`,
+      [idEmpleado, idCampeonato, codigoPartido],
+    );
+    return rows.length > 0;
+  }
+
   static async create({
     idCampeonato,
     codigoPartido,
@@ -234,7 +254,8 @@ export class DesignacionModel {
       if (
         excluir &&
         d.id_campeonato === excluir.idCampeonato &&
-        d.codigo_partido === excluir.codigoPartido
+        d.codigo_partido === excluir.codigoPartido &&
+        d.id_funcion === excluir.idFuncion
       ) {
         continue;
       }

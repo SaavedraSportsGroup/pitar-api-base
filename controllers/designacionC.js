@@ -35,6 +35,31 @@ const errorArbitro = async (raw) => {
   return ok ? null : "Árbitro no asignable (debe ser un empleado activo con rol ARB)";
 };
 
+// Like errorArbitro, PLUS the business rule "la designación es solo para
+// árbitros con disponibilidad para el partido": the employee must have a free
+// (DISPONIBLE) slot covering the match date/time, or already be designated in
+// that same match. Used for `id_arbitro_des` only.
+const errorArbitroDesignado = async (raw, ctx) => {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) {
+    return "id de árbitro inválido (debe ser un entero positivo)";
+  }
+  const ok = await DesignacionModel.arbitroAsignable(n);
+  if (!ok) return "Árbitro no asignable (debe ser un empleado activo con rol ARB)";
+
+  const partido = await DesignacionModel.datosPartido(ctx);
+  if (!partido) return "No se pudo leer la fecha/hora del partido";
+
+  const disponible = await DesignacionModel.arbitroDisponibleParaPartido(n, {
+    ...ctx,
+    fecha: partido.fecha,
+    hora: partido.hora,
+  });
+  return disponible
+    ? null
+    : "El árbitro no tiene disponibilidad para la fecha/hora de este partido";
+};
+
 // --- Paso 5: bloqueo de franja y notificación --------------------------------
 
 const formatearFecha = (iso) => {
@@ -91,6 +116,7 @@ const liberarFranja = async (fila) => {
       excluir: {
         idCampeonato: fila.id_campeonato,
         codigoPartido: fila.codigo_partido,
+        idFuncion: fila.id_funcion,
       },
     });
     if (!cubierta) {
@@ -170,7 +196,7 @@ export class DesignacionController {
         return res.status(400).json({ message: "Función no encontrada" });
       }
 
-      const msgDes = await errorArbitro(id_arbitro_des);
+      const msgDes = await errorArbitroDesignado(id_arbitro_des, ctx);
       if (msgDes) return res.status(400).json({ message: msgDes });
 
       if (id_arbitro_act !== undefined && id_arbitro_act !== null) {
@@ -234,7 +260,7 @@ export class DesignacionController {
       const campos = {};
 
       if (id_arbitro_des !== undefined && id_arbitro_des !== null) {
-        const msg = await errorArbitro(id_arbitro_des);
+        const msg = await errorArbitroDesignado(id_arbitro_des, ctx);
         if (msg) return res.status(400).json({ message: msg });
         campos.id_arbitro_des = Number(id_arbitro_des);
       }

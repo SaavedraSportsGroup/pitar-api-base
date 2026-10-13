@@ -28,9 +28,21 @@ const BASE_SELECT = `
 export class ArbitroModel {
   // All ACTIVE users whose role is ARB. Only active árbitros are assignable,
   // so the selector lists (Partidos/Disponibilidad) filter `u.activo = 1`.
-  static async getAll() {
+  // Optional { fecha, hora } restricts the list to árbitros with a free
+  // (DISPONIBLE) availability slot covering that date/time, used by the
+  // Partidos selector so a designation only offers available árbitros.
+  static async getAll({ fecha, hora } = {}) {
+    const filtrar = fecha && hora;
     const [rows] = await db.pitar.query(
-      `${BASE_SELECT} WHERE u.activo = 1 ORDER BY nombre, u.username`,
+      `${BASE_SELECT}
+        WHERE u.activo = 1
+        ${filtrar ? `AND EXISTS (
+            SELECT 1 FROM arbitros_disponibilidad ad
+             WHERE ad.id_empleado = e.id AND ad.fecha = ?
+               AND ad.hora_inicio <= ? AND ad.hora_fin > ?
+               AND ad.estado = 'DISPONIBLE')` : ""}
+       ORDER BY nombre, u.username`,
+      filtrar ? [fecha, hora, hora] : [],
     );
     return rows;
   }

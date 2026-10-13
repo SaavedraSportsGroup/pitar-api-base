@@ -1,4 +1,5 @@
 import { DisponibilidadModel } from "../models/disponibilidad.js";
+import { DesignacionModel } from "../models/designacion.js";
 
 // Allowed values for `arbitros_disponibilidad.estado` (matches the DB ENUM).
 export const ESTADOS = ["DISPONIBLE", "ASIGNADO", "OCUPADO", "PROGRAMADO"];
@@ -278,6 +279,20 @@ export class DisponibilidadController {
       const existing = await DisponibilidadModel.getById(id);
       if (!existing) {
         return res.status(404).json({ message: "Disponibilidad no encontrada" });
+      }
+
+      // Paso 5: una franja cubierta por una designación activa no puede
+      // cambiarse de estado a mano (evita desbloquear un partido asignado).
+      const bloqueada = await DesignacionModel.franjaCubiertaPorDesignacion({
+        idEmpleado: existing.id_empleado,
+        fecha: existing.fecha,
+        horaInicio: existing.hora_inicio,
+        horaFin: existing.hora_fin,
+      });
+      if (bloqueada) {
+        return res.status(409).json({
+          message: "La franja tiene un partido asignado y no puede modificarse",
+        });
       }
 
       const updated = await DisponibilidadModel.updateEstado(id, estado);

@@ -26,11 +26,11 @@ const BASE_SELECT = `
 `;
 
 export class ArbitroModel {
-  // All users whose role is ARB. `activo` is projected, not filtered, so
-  // consumers can show inactive árbitros too.
+  // All ACTIVE users whose role is ARB. Only active árbitros are assignable,
+  // so the selector lists (Partidos/Disponibilidad) filter `u.activo = 1`.
   static async getAll() {
     const [rows] = await db.pitar.query(
-      `${BASE_SELECT} ORDER BY nombre, u.username`,
+      `${BASE_SELECT} WHERE u.activo = 1 ORDER BY nombre, u.username`,
     );
     return rows;
   }

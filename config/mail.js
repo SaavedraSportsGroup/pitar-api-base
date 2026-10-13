@@ -72,9 +72,62 @@ export const sendWelcomeEmail = async ({ to, username, password }) => {
   }
 };
 
+// Envía el aviso de designación al árbitro asignado a un partido. Mismo
+// contrato never-throw que los anteriores: nunca interrumpe la operación de
+// designación. (Mejora futura: notificación por WhatsApp además del correo.)
+export const sendDesignacionEmail = async ({
+  to,
+  nombre,
+  codigoPartido,
+  funcion,
+  fecha,
+  hora,
+  lugar,
+  equipos,
+}) => {
+  const config = getMailConfig();
+
+  if (!config.host || !config.user) {
+    console.warn(
+      "SMTP no configurado: no se envió el correo de designación a " + to,
+    );
+    return null;
+  }
+
+  try {
+    const transporter = createTransporter(config);
+
+    const info = await transporter.sendMail({
+      from: config.from,
+      to,
+      subject: `PITAR – Designación: partido ${codigoPartido}`,
+      html: `
+        <p>Hola ${nombre},</p>
+        <p>Has sido designado como <strong>${funcion}</strong> para el partido:</p>
+        <ul>
+          <li><strong>Código:</strong> ${codigoPartido}</li>
+          <li><strong>Fecha:</strong> ${fecha}</li>
+          <li><strong>Hora:</strong> ${hora}</li>
+          <li><strong>Lugar:</strong> ${lugar}</li>
+          <li><strong>Equipos:</strong> ${equipos}</li>
+        </ul>
+        <p>Revisa el módulo Partidos → Mis Partidos para más detalle.</p>
+        <p>Saludos,<br />Equipo PITAR</p>
+      `,
+    });
+
+    return info;
+  } catch (error) {
+    // No se propaga: la designación ya se guardó correctamente.
+    console.error(
+      `Error al enviar el correo de designación a ${to}:`,
+      error.message,
+    );
+    return null;
+  }
+};
 // Envía el correo de recuperación de contraseña con el enlace de un solo uso.
-// Mismo contrato que sendWelcomeEmail: nunca lanza, solo registra en consola
-// si el SMTP no está configurado o falla el envío.
+// Mismo contrato que los anteriores: nunca lanza, solo registra en consola.
 export const sendResetPasswordEmail = async ({ to, username, link }) => {
   const config = getMailConfig();
 

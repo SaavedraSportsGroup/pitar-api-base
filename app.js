@@ -6,6 +6,8 @@ import parametrosRouter from "./routes/parametrosR.js";
 import usuariosRouter from "./routes/usuariosR.js";
 import empleadoRouter from "./routes/empleadoR.js";
 import disponibilidadRouter from "./routes/disponibilidadR.js";
+import campeonatoRouter from "./routes/campeonatoR.js";
+import designacionesRouter from "./routes/designacionesR.js";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
 import { db } from "./config/db.js";
@@ -25,6 +27,8 @@ app.use("/api/parametros", parametrosRouter);
 app.use("/api/usuarios", usuariosRouter);
 app.use("/api/empleados", empleadoRouter);
 app.use("/api/disponibilidad", disponibilidadRouter);
+app.use("/api/campeonatos", campeonatoRouter);
+app.use("/api/designaciones", designacionesRouter);
 
 // Salud del servicio. En Vercel no se sirven archivos estáticos desde Express:
 // estas rutas responden JSON para que el navegador no reciba un error.

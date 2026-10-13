@@ -128,7 +128,7 @@ export class DisponibilidadController {
   // POST /api/disponibilidad
   static create = async (req, res) => {
     try {
-      const { id_empleado, fecha, hora_inicio, hora_fin, estado } = req.body ?? {};
+      const { id_empleado, fecha, hora_inicio, hora_fin } = req.body ?? {};
 
       const idEmpleado = Number(id_empleado);
       if (!Number.isInteger(idEmpleado) || idEmpleado <= 0) {
@@ -148,7 +148,7 @@ export class DisponibilidadController {
         });
       }
 
-      const shape = validateFields({ fecha, horaInicio: hora_inicio, horaFin: hora_fin, estado });
+      const shape = validateFields({ fecha, horaInicio: hora_inicio, horaFin: hora_fin });
       if (shape) {
         return res.status(400).json({ message: shape });
       }
@@ -176,12 +176,12 @@ export class DisponibilidadController {
         });
       }
 
+      // POST siempre crea en "DISPONIBLE"; el estado solo cambia vía PATCH /estado.
       const created = await DisponibilidadModel.create({
         idEmpleado,
         fecha,
         horaInicio: hora_inicio,
         horaFin: hora_fin,
-        estado,
       });
 
       return res.status(201).json(created);
@@ -199,6 +199,10 @@ export class DisponibilidadController {
       const existing = await DisponibilidadModel.getById(id);
       if (!existing) {
         return res.status(404).json({ message: "Disponibilidad no encontrada" });
+      }
+
+      if (existing.estado !== "DISPONIBLE") {
+        return res.status(409).json({ message: "Solo se puede modificar una franja en estado DISPONIBLE" });
       }
 
       const { fecha, hora_inicio, hora_fin, estado } = req.body ?? {};
@@ -293,6 +297,10 @@ export class DisponibilidadController {
       const existing = await DisponibilidadModel.getById(id);
       if (!existing) {
         return res.status(404).json({ message: "Disponibilidad no encontrada" });
+      }
+
+      if (existing.estado !== "DISPONIBLE") {
+        return res.status(409).json({ message: "Solo se puede eliminar una franja en estado DISPONIBLE" });
       }
 
       await DisponibilidadModel.remove(id);

@@ -146,4 +146,29 @@ export class DisponibilidadModel {
     );
     return result.affectedRows;
   }
+
+  // --- Vista global (coordinación de designaciones) --------------------------
+  // Every availability slot of EVERY employee within a date range, enriched
+  // with the employee name and login code. Privileged-only: ADM/GER/SUP use it
+  // to see at a glance who is available on any day (month calendar + day detail).
+  static async global({ desde, hasta }) {
+    const [rows] = await db.pitar.query(
+      `SELECT
+          ad.id
+      ,   ad.id_empleado
+      ,   DATE_FORMAT(ad.fecha, '%Y-%m-%d')       AS fecha
+      ,   TIME_FORMAT(ad.hora_inicio, '%H:%i:%s') AS hora_inicio
+      ,   TIME_FORMAT(ad.hora_fin, '%H:%i:%s')    AS hora_fin
+      ,   ad.estado
+      ,   CONCAT(e.nombres, ' ', e.apellidos)     AS nombre
+      ,   u.username                              AS codigo
+       FROM arbitros_disponibilidad ad
+       JOIN empleados e ON e.id = ad.id_empleado
+       LEFT JOIN usuarios u ON u.id = e.id_usuario
+       WHERE ad.fecha BETWEEN ? AND ?
+       ORDER BY ad.fecha, ad.hora_inicio, nombre`,
+      [desde, hasta],
+    );
+    return rows;
+  }
 }

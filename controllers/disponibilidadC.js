@@ -52,6 +52,37 @@ const invalidId = (raw) => {
 };
 
 export class DisponibilidadController {
+  // GET /api/disponibilidad/global?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+  // Disponibilidad de TODO el personal en un rango (coordina designaciones).
+  // Debe ir protegida por requireRole("ADM","GER","SUP") en la ruta y estar
+  // declarada ANTES de /:idEmpleado.
+  static global = async (req, res) => {
+    try {
+      const { desde, hasta } = req.query;
+
+      if (
+        typeof desde !== "string" ||
+        !RE_FECHA.test(desde) ||
+        typeof hasta !== "string" ||
+        !RE_FECHA.test(hasta)
+      ) {
+        return res.status(400).json({
+          message: "desde y hasta son obligatorios y deben tener el formato YYYY-MM-DD",
+        });
+      }
+      if (desde > hasta) {
+        return res.status(400).json({ message: "'desde' no puede ser posterior a 'hasta'" });
+      }
+
+      const rows = await DisponibilidadModel.global({ desde, hasta });
+
+      return res.json(rows);
+    } catch (error) {
+      console.log("Error al obtener la disponibilidad global.", error);
+      return res.status(500).json({ message: "Error interno del servidor" });
+    }
+  };
+
   // GET /api/disponibilidad/:idEmpleado  (fecha | desde+hasta son obligatorios)
   static getByEmpleado = async (req, res) => {
     try {

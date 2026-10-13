@@ -63,6 +63,12 @@ const disponibilidadRouter = Router();
 
 // The literal segment must be declared before the /:idEmpleado route.
 disponibilidadRouter.get(
+  "/global",
+  AuthMiddleware,
+  requireRole("ADM", "GER", "SUP"),
+  DisponibilidadController.global,
+);
+disponibilidadRouter.get(
   "/estado/:idEmpleado",
   AuthMiddleware,
   canUseDisponibilidad,

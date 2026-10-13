@@ -205,9 +205,9 @@ export class DisponibilidadController {
         return res.status(409).json({ message: "Solo se puede modificar una franja en estado DISPONIBLE" });
       }
 
-      const { fecha, hora_inicio, hora_fin, estado } = req.body ?? {};
+      const { fecha, hora_inicio, hora_fin } = req.body ?? {};
 
-      const shape = validateFields({ fecha, horaInicio: hora_inicio, horaFin: hora_fin, estado });
+      const shape = validateFields({ fecha, horaInicio: hora_inicio, horaFin: hora_fin });
       if (shape) {
         return res.status(400).json({ message: shape });
       }
@@ -232,7 +232,7 @@ export class DisponibilidadController {
       if (fecha !== undefined) fields.fecha = fecha;
       if (hora_inicio !== undefined) fields.hora_inicio = hora_inicio;
       if (hora_fin !== undefined) fields.hora_fin = hora_fin;
-      if (estado !== undefined) fields.estado = estado;
+      // El estado no se actualiza aquí: solo cambia vía PATCH /:id/estado (módulo de asignaciones).
 
       if (Object.keys(fields).length === 0) {
         return res
